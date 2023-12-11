@@ -1,12 +1,25 @@
 from aiogram.types import ReplyKeyboardMarkup, KeyboardButton, InlineKeyboardButton
 from app.database.requests import get_categories, get_products
-from aiogram.utils.keyboard import  InlineKeyboardBuilder
+from aiogram.utils.keyboard import InlineKeyboardBuilder
 
 main = ReplyKeyboardMarkup(keyboard=[
     [KeyboardButton(text='Каталог')],
+    [KeyboardButton(text='Корзина')],
     [KeyboardButton(text='Контакты')]
 ], resize_keyboard=True, input_field_placeholder='Выберите пункт ниже')
 
+main_admin = ReplyKeyboardMarkup(keyboard=[
+    [KeyboardButton(text='Каталог')],
+    [KeyboardButton(text='Корзина')],
+    [KeyboardButton(text='Админ-панель')]
+], resize_keyboard=True, input_field_placeholder='Выберите пункт ниже')
+
+
+admin_panel = ReplyKeyboardMarkup(keyboard=[
+    [KeyboardButton(text='Добавить товар')],
+    [KeyboardButton(text='Удалить товар')],
+    [KeyboardButton(text='Сделать рассылку')]
+], resize_keyboard=True, input_field_placeholder='Выберите пункт ниже')
 
 async def categories():
     categories_kb = InlineKeyboardBuilder()

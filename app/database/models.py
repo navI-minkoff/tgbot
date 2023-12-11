@@ -3,9 +3,11 @@
 from sqlalchemy import BigInteger, ForeignKey
 from sqlalchemy.orm import relationship, Mapped, mapped_column, DeclarativeBase
 from sqlalchemy.ext.asyncio import AsyncAttrs, async_sessionmaker, create_async_engine
-from config import SQLALCHEMY_URL
+from dotenv import load_dotenv
+import os
 
-engine = create_async_engine(SQLALCHEMY_URL, echo=True)
+load_dotenv()
+engine = create_async_engine(os.getenv('SQLALCHEMY_URL'), echo=True)
 
 async_session = async_sessionmaker(engine)
 
@@ -26,6 +28,13 @@ class Category(Base):
 
     products = relationship('Product', back_populates='category')
 
+class Brand(Base):
+    __tablename__ = 'brands'
+
+    id: Mapped[int] = mapped_column(primary_key=True)
+    name: Mapped[str] = mapped_column()
+
+    products = relationship('Product', back_populates='brand')
 
 
 class Product(Base):
@@ -36,8 +45,10 @@ class Product(Base):
     description: Mapped[str] = mapped_column()
     price: Mapped[int] = mapped_column()
     category_id: Mapped[int] = mapped_column(ForeignKey('categories.id'))
+    brand_id: Mapped[int] = mapped_column(ForeignKey('brands.id'))
 
     category = relationship('Category', back_populates='products')
+    brand = relationship('Brand', back_populates='products')
 
 
 async def async_main():
