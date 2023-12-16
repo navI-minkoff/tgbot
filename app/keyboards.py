@@ -1,6 +1,9 @@
 from aiogram.types import ReplyKeyboardMarkup, KeyboardButton, InlineKeyboardButton
 from app.database.requests import get_categories, get_products
 from aiogram.utils.keyboard import InlineKeyboardBuilder
+from app.admin import NewOrder
+from aiogram.fsm.state import State, StatesGroup
+from aiogram.fsm.context import FSMContext
 
 main = ReplyKeyboardMarkup(keyboard=[
     [KeyboardButton(text='Каталог')],
@@ -14,19 +17,26 @@ main_admin = ReplyKeyboardMarkup(keyboard=[
     [KeyboardButton(text='Админ-панель')]
 ], resize_keyboard=True, input_field_placeholder='Выберите пункт ниже')
 
-
 admin_panel = ReplyKeyboardMarkup(keyboard=[
     [KeyboardButton(text='Добавить товар')],
     [KeyboardButton(text='Удалить товар')],
     [KeyboardButton(text='Сделать рассылку')]
 ], resize_keyboard=True, input_field_placeholder='Выберите пункт ниже')
 
-async def categories():
+cancel = ReplyKeyboardMarkup(keyboard=[
+    [KeyboardButton(text='Отмена')]
+
+], resize_keyboard=True)
+
+
+async def categories(is_admin: bool):
     categories_kb = InlineKeyboardBuilder()
     categories = await get_categories()
-
+    text = 'category_'
+    if is_admin:
+        text = ''
     for category in categories:
-        categories_kb.add(InlineKeyboardButton(text=category.name, callback_data=f'category_{category.id}'))
+        categories_kb.add(InlineKeyboardButton(text=category.name, callback_data=text + f'{category.id}'))
 
     return categories_kb.adjust(2).as_markup()
 
