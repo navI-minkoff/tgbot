@@ -5,7 +5,7 @@ from aiogram.filters import CommandStart, Command, StateFilter
 from aiogram.fsm.context import FSMContext
 from aiogram.types import Message, CallbackQuery
 import app.keyboards as kb
-from app.database.requests import get_product, add_product
+from app.database.requests import get_product, add_product, get_brand
 from aiogram.fsm.storage.memory import MemoryStorage
 from aiogram.fsm.state import State, StatesGroup
 
@@ -72,8 +72,9 @@ async def category_selected(callback: CallbackQuery):
 async def product_selected(callback: CallbackQuery):
     product_id = callback.data.split('_')[1]
     product = await get_product(product_id=product_id)
-    await bot.send_photo(callback.from_user.id, product.photo, caption=f'<b>{product.name}</b>\n\n{product.description}\n\nЦена: {product.price} руб')
-    #await callback.message.answer()
+    brand = await get_brand(product.brand_id)
+    await bot.send_photo(callback.from_user.id, product.photo,
+                         caption=f'<b>{product.name}</b>\n\nБренд:<b>{brand.name}</b>\n\n{product.description}\n\nЦена: {product.price} руб')
     await callback.answer(f'Вы выбрали {product.name}')
 
 
@@ -93,15 +94,22 @@ async def add_item_type(call: types.CallbackQuery, state: FSMContext):
 @router.message(StateFilter(NewOrder.name))
 async def add_item_name(message: types.Message, state: FSMContext):
     await state.update_data(name=message.text)
-    await message.answer(f'Добавьте бренд')
+    await message.answer(f'Добавьте бренд', reply_markup=await kb.brands())
     await state.set_state(NewOrder.brand)
 
 
-@router.message(StateFilter(NewOrder.brand))
-async def add_item_name(message: types.Message, state: FSMContext):
-    await state.update_data(brand=message.text)
-    await message.answer(f'Добавьте фото')
+@router.callback_query(StateFilter(NewOrder.brand))
+async def add_item_brand(call: types.CallbackQuery, state: FSMContext):
+    await state.update_data(brand=call.data)
+    await call.message.answer(f'Добавьте фото', reply_markup=kb.cancel)
     await state.set_state(NewOrder.photo)
+
+
+# @router.message(StateFilter(NewOrder.brand))
+# async def add_item_brand(message: types.Message, state: FSMContext):
+#     await state.update_data(brand=message.text)
+#     await message.answer(f'Добавьте фото')
+#     await state.set_state(NewOrder.photo)
 
 
 @router.message(lambda message: not message.photo, StateFilter(NewOrder.photo))
@@ -127,8 +135,8 @@ async def add_item_name(message: types.Message, state: FSMContext):
 async def add_item_name(message: types.Message, state: FSMContext):
     await state.update_data(price=message.text)
     await add_product(state)
-    state = None
-    await message.answer('Товар успешно создан')
+    await state.clear()
+    await message.answer('Товар успешно создан', reply_markup=kb.admin_panel)
 
 
 @router.message()
