@@ -3,11 +3,13 @@ import os
 from aiogram import Router, F, Dispatcher, types, Bot
 from aiogram.filters import CommandStart, Command, StateFilter
 from aiogram.fsm.context import FSMContext
-from aiogram.types import Message, CallbackQuery
+from aiogram.types import Message, CallbackQuery, InlineKeyboardMarkup, InlineKeyboardButton
 import app.keyboards as kb
-from app.database.requests import get_product, add_product, get_brand
+from app.database.requests import get_product, add_product, get_brand, delete_product
 from aiogram.fsm.storage.memory import MemoryStorage
 from aiogram.fsm.state import State, StatesGroup
+from app.database.models import Base
+from aiogram.utils.keyboard import InlineKeyboardBuilder
 
 bot = Bot(token=os.getenv('TOKEN'), parse_mode='HTML')
 
@@ -25,6 +27,15 @@ class NewOrder(StatesGroup):
     price = State()
 
 
+@router.message(F.text == 'Отмена')
+async def contacts(message: Message, state: FSMContext):
+    current_state = await state.get_state()
+    if current_state is None:
+        return
+    await state.clear()
+    await message.answer('Действие отменено', reply_markup=kb.admin_panel)
+
+
 @router.message(CommandStart())
 async def cmd_start(message: Message):
     await message.answer(f'{message.from_user.first_name}, добро пожаловать!', reply_markup=kb.main)
@@ -33,7 +44,7 @@ async def cmd_start(message: Message):
 @router.message(Command('admin'))
 async def admin(message: Message):
     if message.from_user.id == int(os.getenv('ADMIN_ID')):
-        await message.answer('Вы авторизовались как администратор', reply_markup=kb.main_admin)
+        await message.answer('Вы авторизовались как администратор', reply_markup=kb.admin_panel)
     else:
         await message.answer(f'Вы не являетесь администратором')
 
@@ -68,13 +79,27 @@ async def category_selected(callback: CallbackQuery):
     await callback.answer('')
 
 
+@router.callback_query(F.data.startswith('del '))
+async def del_product(callback: CallbackQuery):
+    product_id = callback.data.split(' ')[1]
+    await delete_product(product_id)
+    await callback.message.answer(f'Товар удален', reply_markup=kb.admin_panel)
+
+
 @router.callback_query(F.data.startswith('product_'))
 async def product_selected(callback: CallbackQuery):
     product_id = callback.data.split('_')[1]
     product = await get_product(product_id=product_id)
     brand = await get_brand(product.brand_id)
-    await bot.send_photo(callback.from_user.id, product.photo,
-                         caption=f'<b>{product.name}</b>\n\nБренд:<b>{brand.name}</b>\n\n{product.description}\n\nЦена: {product.price} руб')
+    categories_kb = InlineKeyboardBuilder()
+    if callback.from_user.id == int(os.getenv('ADMIN_ID')):
+        await bot.send_photo(callback.from_user.id, product.photo,
+                             caption=f'<b>{product.name}</b>\n\nБренд:<b>{brand.name}</b>\n\n{product.description}\n\nЦена: {product.price} руб',
+                             reply_markup=InlineKeyboardBuilder().add(InlineKeyboardButton(text=f'Удалить',
+                                                                callback_data=f'del {product.id}')).as_markup())
+    else:
+        await bot.send_photo(callback.from_user.id, product.photo,
+                             caption=f'<b>{product.name}</b>\n\nБренд:<b>{brand.name}</b>\n\n{product.description}\n\nЦена: {product.price} руб')
     await callback.answer(f'Вы выбрали {product.name}')
 
 
@@ -137,6 +162,15 @@ async def add_item_name(message: types.Message, state: FSMContext):
     await add_product(state)
     await state.clear()
     await message.answer('Товар успешно создан', reply_markup=kb.admin_panel)
+
+
+@router.message(F.text == 'Удалить товар')
+async def admin_panel(message: Message):
+    if message.from_user.id != int(os.getenv('ADMIN_ID')):
+        await message.answer(f'Вы не являетесь администратором')
+        return
+
+    await message.answer('Выберете вариант из каталога', reply_markup=await kb.categories(False))
 
 
 @router.message()

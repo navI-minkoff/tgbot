@@ -53,6 +53,20 @@ class Product(Base):
 
     category = relationship('Category', back_populates='products')
     brand = relationship('Brand', back_populates='products')
+    size = relationship('Size', back_populates='products')
+
+
+class Size(Base):
+    __tablename__ = 'sizes'
+    id: Mapped[int] = mapped_column(primary_key=True)
+    product_id: Mapped[int] = mapped_column(ForeignKey('products.id'))
+    size_m: Mapped[int] = mapped_column()
+    size_l: Mapped[int] = mapped_column()
+    size_xl: Mapped[int] = mapped_column()
+    size_xxl: Mapped[int] = mapped_column()
+    size_3xl: Mapped[int] = mapped_column()
+
+    products = relationship('Product', back_populates='size')
 
 
 async def async_main():

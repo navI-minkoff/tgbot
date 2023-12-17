@@ -49,6 +49,7 @@ async def brands():
 
     return brands_kb.adjust(2).as_markup()
 
+
 async def products(category_id):
     product_kb = InlineKeyboardBuilder()
     products_ = await get_products(category_id)

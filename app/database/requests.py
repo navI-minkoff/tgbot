@@ -41,10 +41,19 @@ async def get_brand(brand_id) -> Brand:
 
 async def add_product(state: FSMContext):
     data = await state.get_data()
-    category_id = select(Category).where(Category.name == data['type'])
-    brand_id = select(Brand).where(Brand.name == data['brand'])
     product = Product(name=data['name'], photo=data['photo'], description=data['desc'], price=data['price'],
                       category_id=data['type'], brand_id=data['brand'])
     async with async_session() as session:
         session.add(product)
         await session.commit()
+
+
+async def delete_product(product_id):
+    async with async_session() as session:
+        stmt = select(Product).where(Product.id == product_id)
+        result = await session.execute(stmt)
+        product = result.scalar_one_or_none()
+
+        if product is not None:
+            await session.delete(product)
+            await session.commit()
