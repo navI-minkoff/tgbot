@@ -1,8 +1,8 @@
+import json
 from sqlite3 import IntegrityError
 
-from app.database.models import User, Category, Product, Brand, async_session
-from sqlalchemy import select
-from sqlalchemy import insert
+from app.database.models import User, Category, Product, Brand, async_session, Cart
+from sqlalchemy import select, update, insert
 from aiogram.fsm.context import FSMContext
 
 
@@ -50,6 +50,35 @@ async def add_product(state: FSMContext):
         await session.commit()
 
 
+async def get_cart_by_user_and_product(user_id, product_id):
+    async with async_session() as session:
+        statement = select(Cart).filter_by(user_id=user_id, product_id=product_id)
+        result = await session.execute(statement)
+        return result.scalar_one_or_none()
+
+
+async def add_product_in_cart(user_id, product_id, product_size):
+    existing_cart = await get_cart_by_user_and_product(user_id, product_id)
+
+    if existing_cart:
+        cart_data = json.loads(existing_cart.size)
+        if product_size in cart_data:
+            cart_data[product_size] += 1
+        else:
+            cart_data[product_size] = 1
+
+        async with async_session() as session:
+            update_statement = update(Cart).where(Cart.id == existing_cart.id).values(size=json.dumps(cart_data))
+            await session.execute(update_statement)
+            await session.commit()
+    else:
+        json_size = json.dumps({product_size: 1})
+        new_cart = Cart(user_id=user_id, product_id=product_id, size=json_size)
+        async with async_session() as session:
+            session.add(new_cart)
+            await session.commit()
+
+
 async def delete_product(product_id):
     async with async_session() as session:
         stmt = select(Product).where(Product.id == product_id)
@@ -77,5 +106,3 @@ async def add_user_to_db(tg_id: int):
                 await session.rollback()
                 stmt = select(User).filter(User.tg_id == tg_id)
                 existing_user = await session.execute(stmt)
-
-

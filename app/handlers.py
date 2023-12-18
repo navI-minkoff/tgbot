@@ -6,7 +6,7 @@ from aiogram.filters import CommandStart, Command, StateFilter
 from aiogram.fsm.context import FSMContext
 from aiogram.types import Message, CallbackQuery, InlineKeyboardMarkup, InlineKeyboardButton
 import app.keyboards as kb
-from app.database.requests import get_product, add_product, get_brand, delete_product, add_user_to_db
+from app.database.requests import get_product, add_product, get_brand, delete_product, add_user_to_db, add_product_in_cart
 from aiogram.fsm.storage.memory import MemoryStorage
 from aiogram.fsm.state import State, StatesGroup
 from app.database.models import Base
@@ -103,19 +103,43 @@ async def cancel_del_product(callback: CallbackQuery):
     await callback.message.answer('Удаление товара отменено', reply_markup=kb.admin_panel)
 
 
+@router.callback_query(F.data.startswith('size_selection '))
+async def product_size_selection(callback: CallbackQuery):
+    product_id = callback.data.split(' ')[1]
+    product = await get_product(product_id)
+    product_sizes = product.sizes
+    available_sizes = [size for size, quantity in product_sizes.items() if quantity != 0]
+    sizes_keyboard = InlineKeyboardBuilder()
+    for size_name in available_sizes:
+        sizes_keyboard.add(InlineKeyboardButton(text=f'{size_name}', callback_data=f'add_product {product_id} {size_name}'))
+
+    await callback.message.answer(text='Выберите размер:', reply_markup=sizes_keyboard.adjust(2).as_markup())
+
+
+#@router.message(lambda message: message.text and message.text.upper() in ["S", "M", "L"])
+@router.callback_query(F.data.startswith('add_product '))
+async def add_product_in_user_cart(callback: CallbackQuery):
+    product_id = callback.data.split(' ')[1]
+    selected_size = callback.data.split(' ')[2]
+    await add_product_in_cart(user_id=callback.from_user.id, product_id=product_id, product_size=selected_size)
+    await callback.message.answer(f'Товар добавлен в корзину')
+
 @router.callback_query(F.data.startswith('product_'))
 async def product_selected(callback: CallbackQuery):
     product_id = callback.data.split('_')[1]
     product = await get_product(product_id=product_id)
     brand = await get_brand(product.brand_id)
-    if callback.from_user.id == int(os.getenv('ADMIN_ID')):
+    if False:#check_user_is_admin(callback.message):
         await bot.send_photo(callback.from_user.id, product.photo,
                              caption=f'<b>{product.name}</b>\n\nБренд:<b>{brand.name}</b>\n\n{product.description}\n\nЦена: {product.price} руб',
                              reply_markup=InlineKeyboardBuilder().add(InlineKeyboardButton(text=f'Удалить',
                                                                                            callback_data=f'del {product.id}')).as_markup())
     else:
         await bot.send_photo(callback.from_user.id, product.photo,
-                             caption=f'<b>{product.name}</b>\n\nБренд:<b>{brand.name}</b>\n\n{product.description}\n\nЦена: {product.price} руб')
+                             caption=f'<b>{product.name}</b>\n\nБренд:<b>{brand.name}</b>\n\n{product.description}\n\nЦена: {product.price} руб',
+                             reply_markup=InlineKeyboardBuilder().add(InlineKeyboardButton(text=f'В корзину',
+                                                                                           callback_data=f'size_selection {product.id}')).as_markup()
+                             )
     await callback.answer(f'Вы выбрали {product.name}')
 
 
