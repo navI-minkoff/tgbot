@@ -1,6 +1,6 @@
 # First message
 # Каталог - категории товаров
-from sqlalchemy import BigInteger, ForeignKey
+from sqlalchemy import BigInteger, ForeignKey, JSON
 from sqlalchemy.orm import relationship, Mapped, mapped_column, DeclarativeBase
 from sqlalchemy.ext.asyncio import AsyncAttrs, async_sessionmaker, create_async_engine
 from dotenv import load_dotenv
@@ -21,6 +21,8 @@ class User(Base):
 
     id: Mapped[int] = mapped_column(primary_key=True)
     tg_id = mapped_column(BigInteger)
+
+    cart = relationship('Cart', back_populates='user')
 
 
 class Category(Base):
@@ -50,23 +52,23 @@ class Product(Base):
     price: Mapped[int] = mapped_column()
     category_id: Mapped[int] = mapped_column(ForeignKey('categories.id'))
     brand_id: Mapped[int] = mapped_column(ForeignKey('brands.id'))
+    sizes: Mapped[dict] = mapped_column(JSON)
 
     category = relationship('Category', back_populates='products')
     brand = relationship('Brand', back_populates='products')
-    size = relationship('Size', back_populates='products')
+    cart = relationship('Cart', back_populates='product')
 
 
-class Size(Base):
-    __tablename__ = 'sizes'
+class Cart(Base):
+    __tablename__ = 'cart'
+
     id: Mapped[int] = mapped_column(primary_key=True)
+    user_id: Mapped[int] = mapped_column(ForeignKey('users.id'))
     product_id: Mapped[int] = mapped_column(ForeignKey('products.id'))
-    size_m: Mapped[int] = mapped_column()
-    size_l: Mapped[int] = mapped_column()
-    size_xl: Mapped[int] = mapped_column()
-    size_xxl: Mapped[int] = mapped_column()
-    size_3xl: Mapped[int] = mapped_column()
+    size: Mapped[dict] = mapped_column(JSON)
 
-    products = relationship('Product', back_populates='size')
+    user = relationship('User', back_populates='cart')
+    product = relationship('Product', back_populates='cart')
 
 
 async def async_main():

@@ -10,6 +10,7 @@ class NewOrder(StatesGroup):
     photo = State()
     desc = State()
     price = State()
+    sizes = State()
 
 
 async def check_user_is_admin(message: Message):

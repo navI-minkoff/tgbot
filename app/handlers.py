@@ -1,3 +1,4 @@
+import json
 import os
 
 from aiogram import Router, F, Dispatcher, types, Bot
@@ -5,12 +6,13 @@ from aiogram.filters import CommandStart, Command, StateFilter
 from aiogram.fsm.context import FSMContext
 from aiogram.types import Message, CallbackQuery, InlineKeyboardMarkup, InlineKeyboardButton
 import app.keyboards as kb
-from app.database.requests import get_product, add_product, get_brand, delete_product
+from app.database.requests import get_product, add_product, get_brand, delete_product, add_user_to_db
 from aiogram.fsm.storage.memory import MemoryStorage
 from aiogram.fsm.state import State, StatesGroup
 from app.database.models import Base
 from aiogram.utils.keyboard import InlineKeyboardBuilder
-from app.admin import check_user_is_admin
+from app.admin import check_user_is_admin, NewOrder
+
 
 bot = Bot(token=os.getenv('TOKEN'), parse_mode='HTML')
 
@@ -19,13 +21,13 @@ router = Router()
 dp = Dispatcher(storage=memory_storage)
 
 
-class NewOrder(StatesGroup):
-    type = State()
-    name = State()
-    brand = State()
-    photo = State()
-    desc = State()
-    price = State()
+# class NewOrder(StatesGroup):
+#     type = State()
+#     name = State()
+#     brand = State()
+#     photo = State()
+#     desc = State()
+#     price = State()
 
 
 @router.message(F.text == 'Отмена')
@@ -40,6 +42,7 @@ async def contacts(message: Message, state: FSMContext):
 @router.message(CommandStart())
 async def cmd_start(message: Message):
     await message.answer(f'{message.from_user.first_name}, добро пожаловать!', reply_markup=kb.main)
+    await add_user_to_db(message.from_user.id)
 
 
 @router.message(Command('admin'))
@@ -105,7 +108,6 @@ async def product_selected(callback: CallbackQuery):
     product_id = callback.data.split('_')[1]
     product = await get_product(product_id=product_id)
     brand = await get_brand(product.brand_id)
-    categories_kb = InlineKeyboardBuilder()
     if callback.from_user.id == int(os.getenv('ADMIN_ID')):
         await bot.send_photo(callback.from_user.id, product.photo,
                              caption=f'<b>{product.name}</b>\n\nБренд:<b>{brand.name}</b>\n\n{product.description}\n\nЦена: {product.price} руб',
@@ -145,13 +147,6 @@ async def add_item_brand(call: types.CallbackQuery, state: FSMContext):
     await state.set_state(NewOrder.photo)
 
 
-# @router.message(StateFilter(NewOrder.brand))
-# async def add_item_brand(message: types.Message, state: FSMContext):
-#     await state.update_data(brand=message.text)
-#     await message.answer(f'Добавьте фото')
-#     await state.set_state(NewOrder.photo)
-
-
 @router.message(lambda message: not message.photo, StateFilter(NewOrder.photo))
 async def add_item_photo_check(message: types.Message):
     await message.answer('Это не фотография')
@@ -172,11 +167,32 @@ async def add_item_name(message: types.Message, state: FSMContext):
 
 
 @router.message(StateFilter(NewOrder.price))
-async def add_item_name(message: types.Message, state: FSMContext):
+async def add_item_price(message: types.Message, state: FSMContext):
     await state.update_data(price=message.text)
+    await message.answer('Добавьте размеры товара в формате JSON (например, {"S": 10, "M": 15, "L": 20})')
+    await state.set_state(NewOrder.sizes)
+
+
+@router.message(StateFilter(NewOrder.sizes))
+async def add_item_sizes(message: types.Message, state: FSMContext):
+    try:
+        sizes_json = json.loads(message.text)
+    except json.JSONDecodeError:
+        await message.answer('Некорректный формат JSON. Пожалуйста, введите размеры в правильном формате.')
+        return
+
+    await state.update_data(sizes=sizes_json)
     await add_product(state)
     await state.clear()
     await message.answer('Товар успешно создан', reply_markup=kb.admin_panel)
+
+
+# @router.message(StateFilter(NewOrder.price))
+# async def add_item_name(message: types.Message, state: FSMContext):
+#     await state.update_data(price=message.text)
+#     await add_product(state)
+#     await state.clear()
+#     await message.answer('Товар успешно создан', reply_markup=kb.admin_panel)
 
 
 @router.message(F.text == 'Удалить товар')
