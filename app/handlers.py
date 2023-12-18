@@ -10,6 +10,7 @@ from aiogram.fsm.storage.memory import MemoryStorage
 from aiogram.fsm.state import State, StatesGroup
 from app.database.models import Base
 from aiogram.utils.keyboard import InlineKeyboardBuilder
+from app.admin import check_user_is_admin
 
 bot = Bot(token=os.getenv('TOKEN'), parse_mode='HTML')
 
@@ -43,10 +44,8 @@ async def cmd_start(message: Message):
 
 @router.message(Command('admin'))
 async def admin(message: Message):
-    if message.from_user.id == int(os.getenv('ADMIN_ID')):
+    if await check_user_is_admin(message):
         await message.answer('Вы авторизовались как администратор', reply_markup=kb.admin_panel)
-    else:
-        await message.answer(f'Вы не являетесь администратором')
 
 
 @router.message(F.text == 'Каталог')
@@ -66,10 +65,8 @@ async def contacts(message: Message):
 
 @router.message(F.text == 'Админ-панель')
 async def admin_panel(message: Message):
-    if message.from_user.id == int(os.getenv('ADMIN_ID')):
+    if await check_user_is_admin(message):
         await message.answer('Вы вошли в админ-панель', reply_markup=kb.admin_panel)
-    else:
-        await message.answer(f'Вы не являетесь администратором')
 
 
 @router.callback_query(F.data.startswith('category_'))
@@ -82,8 +79,25 @@ async def category_selected(callback: CallbackQuery):
 @router.callback_query(F.data.startswith('del '))
 async def del_product(callback: CallbackQuery):
     product_id = callback.data.split(' ')[1]
+    confirmation_keyboard = InlineKeyboardBuilder()
+    confirmation_keyboard.add(
+        InlineKeyboardButton(text='Подтвердить', callback_data=f'confirm_del {product_id}'),
+        InlineKeyboardButton(text='Отмена', callback_data='cancel_del')
+    )
+    await callback.message.answer('Вы уверены, что хотите удалить данный товар?',
+                                  reply_markup=confirmation_keyboard.adjust(2).as_markup())
+
+
+@router.callback_query(F.data.startswith('confirm_del '))
+async def confirm_del_product(callback: CallbackQuery):
+    product_id = callback.data.split(' ')[1]
     await delete_product(product_id)
-    await callback.message.answer(f'Товар удален', reply_markup=kb.admin_panel)
+    await callback.message.answer('Товар удален', reply_markup=kb.admin_panel)
+
+
+@router.callback_query(F.data == 'cancel_del')
+async def cancel_del_product(callback: CallbackQuery):
+    await callback.message.answer('Удаление товара отменено', reply_markup=kb.admin_panel)
 
 
 @router.callback_query(F.data.startswith('product_'))
@@ -96,7 +110,7 @@ async def product_selected(callback: CallbackQuery):
         await bot.send_photo(callback.from_user.id, product.photo,
                              caption=f'<b>{product.name}</b>\n\nБренд:<b>{brand.name}</b>\n\n{product.description}\n\nЦена: {product.price} руб',
                              reply_markup=InlineKeyboardBuilder().add(InlineKeyboardButton(text=f'Удалить',
-                                                                callback_data=f'del {product.id}')).as_markup())
+                                                                                           callback_data=f'del {product.id}')).as_markup())
     else:
         await bot.send_photo(callback.from_user.id, product.photo,
                              caption=f'<b>{product.name}</b>\n\nБренд:<b>{brand.name}</b>\n\n{product.description}\n\nЦена: {product.price} руб')
@@ -105,8 +119,9 @@ async def product_selected(callback: CallbackQuery):
 
 @router.message(StateFilter(None), F.text == 'Добавить товар')
 async def add_item(message: types.Message, state: FSMContext):
-    await state.set_state(NewOrder.type)
-    await message.answer('Выбери тип', reply_markup=await kb.categories(True))
+    if await check_user_is_admin(message):
+        await state.set_state(NewOrder.type)
+        await message.answer('Выбери тип', reply_markup=await kb.categories(True))
 
 
 @router.callback_query(StateFilter(NewOrder.type))
@@ -166,11 +181,10 @@ async def add_item_name(message: types.Message, state: FSMContext):
 
 @router.message(F.text == 'Удалить товар')
 async def admin_panel(message: Message):
-    if message.from_user.id != int(os.getenv('ADMIN_ID')):
-        await message.answer(f'Вы не являетесь администратором')
+    if await check_user_is_admin(message):
+        await message.answer('Выберете вариант из каталога', reply_markup=await kb.categories(False))
+    else:
         return
-
-    await message.answer('Выберете вариант из каталога', reply_markup=await kb.categories(False))
 
 
 @router.message()
