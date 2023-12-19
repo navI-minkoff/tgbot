@@ -6,28 +6,19 @@ from aiogram.filters import CommandStart, Command, StateFilter
 from aiogram.fsm.context import FSMContext
 from aiogram.types import Message, CallbackQuery, InlineKeyboardMarkup, InlineKeyboardButton
 import app.keyboards as kb
-from app.database.requests import get_product, add_product, get_brand, delete_product, add_user_to_db, add_product_in_cart
+from app.database.requests import get_product, add_product, get_brand, delete_product, add_user_to_db, \
+    add_product_in_cart
 from aiogram.fsm.storage.memory import MemoryStorage
 from aiogram.fsm.state import State, StatesGroup
 from app.database.models import Base
 from aiogram.utils.keyboard import InlineKeyboardBuilder
-from app.admin import check_user_is_admin, NewOrder
-
+from app.admin import check_admin_mod_on, NewOrder, update_global_variable, get_global_variable
 
 bot = Bot(token=os.getenv('TOKEN'), parse_mode='HTML')
 
 memory_storage = MemoryStorage()
 router = Router()
 dp = Dispatcher(storage=memory_storage)
-
-
-# class NewOrder(StatesGroup):
-#     type = State()
-#     name = State()
-#     brand = State()
-#     photo = State()
-#     desc = State()
-#     price = State()
 
 
 @router.message(F.text == 'Отмена')
@@ -47,8 +38,14 @@ async def cmd_start(message: Message):
 
 @router.message(Command('admin'))
 async def admin(message: Message):
-    if await check_user_is_admin(message):
-        await message.answer('Вы авторизовались как администратор', reply_markup=kb.admin_panel)
+    is_admin_mod_on = get_global_variable()
+    if message.from_user.id == int(os.getenv('ADMIN_ID')):
+        if is_admin_mod_on:
+            update_global_variable(False)
+            await message.answer('Вы вышли из админ-панели', reply_markup=kb.main)
+        else:
+            update_global_variable(True)
+            await message.answer('Вы авторизовались как администратор', reply_markup=kb.admin_panel)
 
 
 @router.message(F.text == 'Каталог')
@@ -68,7 +65,7 @@ async def contacts(message: Message):
 
 @router.message(F.text == 'Админ-панель')
 async def admin_panel(message: Message):
-    if await check_user_is_admin(message):
+    if await check_admin_mod_on(message):
         await message.answer('Вы вошли в админ-панель', reply_markup=kb.admin_panel)
 
 
@@ -111,12 +108,12 @@ async def product_size_selection(callback: CallbackQuery):
     available_sizes = [size for size, quantity in product_sizes.items() if quantity != 0]
     sizes_keyboard = InlineKeyboardBuilder()
     for size_name in available_sizes:
-        sizes_keyboard.add(InlineKeyboardButton(text=f'{size_name}', callback_data=f'add_product {product_id} {size_name}'))
+        sizes_keyboard.add(
+            InlineKeyboardButton(text=f'{size_name}', callback_data=f'add_product {product_id} {size_name}'))
 
     await callback.message.answer(text='Выберите размер:', reply_markup=sizes_keyboard.adjust(2).as_markup())
 
 
-#@router.message(lambda message: message.text and message.text.upper() in ["S", "M", "L"])
 @router.callback_query(F.data.startswith('add_product '))
 async def add_product_in_user_cart(callback: CallbackQuery):
     product_id = callback.data.split(' ')[1]
@@ -124,12 +121,14 @@ async def add_product_in_user_cart(callback: CallbackQuery):
     await add_product_in_cart(user_id=callback.from_user.id, product_id=product_id, product_size=selected_size)
     await callback.message.answer(f'Товар добавлен в корзину')
 
+
 @router.callback_query(F.data.startswith('product_'))
 async def product_selected(callback: CallbackQuery):
     product_id = callback.data.split('_')[1]
     product = await get_product(product_id=product_id)
     brand = await get_brand(product.brand_id)
-    if False:#check_user_is_admin(callback.message):
+    check = await check_admin_mod_on(callback)
+    if check:
         await bot.send_photo(callback.from_user.id, product.photo,
                              caption=f'<b>{product.name}</b>\n\nБренд:<b>{brand.name}</b>\n\n{product.description}\n\nЦена: {product.price} руб',
                              reply_markup=InlineKeyboardBuilder().add(InlineKeyboardButton(text=f'Удалить',
@@ -145,7 +144,7 @@ async def product_selected(callback: CallbackQuery):
 
 @router.message(StateFilter(None), F.text == 'Добавить товар')
 async def add_item(message: types.Message, state: FSMContext):
-    if await check_user_is_admin(message):
+    if await check_admin_mod_on(message):
         await state.set_state(NewOrder.type)
         await message.answer('Выбери тип', reply_markup=await kb.categories(True))
 
@@ -221,7 +220,7 @@ async def add_item_sizes(message: types.Message, state: FSMContext):
 
 @router.message(F.text == 'Удалить товар')
 async def admin_panel(message: Message):
-    if await check_user_is_admin(message):
+    if await check_admin_mod_on(message):
         await message.answer('Выберете вариант из каталога', reply_markup=await kb.categories(False))
     else:
         return

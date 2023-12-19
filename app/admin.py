@@ -1,6 +1,18 @@
 from aiogram.fsm.state import State, StatesGroup
-from aiogram.types import Message
+from aiogram.types import Message, CallbackQuery
 import os
+
+ADMIN_MODE = False
+
+
+def update_global_variable(new_value):
+    global ADMIN_MODE
+    ADMIN_MODE = new_value
+
+
+def get_global_variable():
+    global ADMIN_MODE
+    return ADMIN_MODE
 
 
 class NewOrder(StatesGroup):
@@ -13,8 +25,12 @@ class NewOrder(StatesGroup):
     sizes = State()
 
 
-async def check_user_is_admin(message: Message):
-    if message.from_user.id != int(os.getenv('ADMIN_ID')):
-        await message.answer(f'Вы не являетесь администратором')
+async def check_admin_mod_on(callback: CallbackQuery):
+    global ADMIN_MODE
+    if callback.from_user.id != int(os.getenv('ADMIN_ID')):
+        await callback.answer(f'Вы не являетесь администратором')
         return False
-    return True
+    elif ADMIN_MODE:
+        return True
+    else:
+        return False
