@@ -7,7 +7,7 @@ from aiogram.fsm.context import FSMContext
 from aiogram.types import Message, CallbackQuery, InlineKeyboardMarkup, InlineKeyboardButton
 import app.keyboards as kb
 from app.database.requests import get_product, add_product, get_brand, delete_product, add_user_to_db, \
-    add_product_in_cart
+    add_product_in_cart, check_product
 from aiogram.fsm.storage.memory import MemoryStorage
 from aiogram.fsm.state import State, StatesGroup
 from app.database.models import Base
@@ -163,8 +163,12 @@ async def add_item_type(call: types.CallbackQuery, state: FSMContext):
 @router.message(StateFilter(NewOrder.name))
 async def add_item_name(message: types.Message, state: FSMContext):
     await state.update_data(name=message.text)
-    await message.answer(f'Добавьте бренд', reply_markup=await kb.brands())
-    await state.set_state(NewOrder.brand)
+    if await check_product(state):
+        await message.answer(f'Такой товар уже существует', reply_markup=kb.admin_panel)
+        await state.clear()
+    else:
+        await message.answer(f'Добавьте бренд', reply_markup=await kb.brands())
+        await state.set_state(NewOrder.brand)
 
 
 @router.callback_query(StateFilter(NewOrder.brand))

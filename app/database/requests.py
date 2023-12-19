@@ -50,6 +50,15 @@ async def add_product(state: FSMContext):
         await session.commit()
 
 
+async def check_product(state: FSMContext):
+    data = await state.get_data()
+
+    async with async_session() as session:
+        result = await session.scalar(select(Product).where(Product.name == data['name']))
+
+        return bool(result)
+
+
 async def get_cart_by_user_and_product(user_id, product_id):
     async with async_session() as session:
         statement = select(Cart).filter_by(user_id=user_id, product_id=product_id)
