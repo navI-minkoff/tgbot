@@ -32,8 +32,12 @@ async def contacts(message: Message, state: FSMContext):
 
 @router.message(CommandStart())
 async def cmd_start(message: Message):
-    await message.answer(f'{message.from_user.first_name}, добро пожаловать!', reply_markup=kb.main)
-    await add_user_to_db(message.from_user.id)
+    if get_global_variable():
+        update_global_variable(False)
+    firs_mess = ', добро пожаловать!'
+    if await add_user_to_db(message.from_user.id):
+        firs_mess = ', с возвращением!'
+    await message.answer(f'{message.from_user.first_name}' + firs_mess, reply_markup=kb.main)
 
 
 @router.message(Command('admin'))
@@ -192,7 +196,8 @@ async def add_item_name(message: types.Message, state: FSMContext):
 @router.message(StateFilter(NewOrder.price))
 async def add_item_price(message: types.Message, state: FSMContext):
     await state.update_data(price=message.text)
-    await message.answer('Добавьте размеры товара в формате JSON (например, {"S": 10, "M": 15, "L": 20})')
+    await message.answer('Добавьте размеры товара в формате JSON (например, для одежды: {"S": 10, "M": 15, "L": 20}\n'
+                         'для обуви: {"40": 10, "41": 15, "42": 20})')
     await state.set_state(NewOrder.sizes)
 
 

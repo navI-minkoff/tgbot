@@ -90,7 +90,7 @@ async def delete_product(product_id):
             await session.commit()
 
 
-async def add_user_to_db(tg_id: int):
+async def add_user_to_db(tg_id: int) -> bool:
     async with async_session() as session:
         stmt = select(User).filter(User.tg_id == tg_id)
         existing_user = await session.execute(stmt)
@@ -106,3 +106,5 @@ async def add_user_to_db(tg_id: int):
                 await session.rollback()
                 stmt = select(User).filter(User.tg_id == tg_id)
                 existing_user = await session.execute(stmt)
+            return False
+        return True

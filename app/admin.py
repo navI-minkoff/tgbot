@@ -28,7 +28,6 @@ class NewOrder(StatesGroup):
 async def check_admin_mod_on(callback: CallbackQuery):
     global ADMIN_MODE
     if callback.from_user.id != int(os.getenv('ADMIN_ID')):
-        await callback.answer(f'Вы не являетесь администратором')
         return False
     elif ADMIN_MODE:
         return True
