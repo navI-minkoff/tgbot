@@ -3,7 +3,7 @@ import json
 from sqlite3 import IntegrityError
 
 from app.database.models import User, Category, Product, Brand, async_session, Cart
-from sqlalchemy import select, update, insert
+from sqlalchemy import select, update, insert, and_
 from aiogram.fsm.context import FSMContext
 
 
@@ -97,6 +97,16 @@ async def delete_product(product_id):
 
         if product is not None:
             await session.delete(product)
+            await session.commit()
+
+
+async def delete_product_in_cart(product_id, user_id):
+    async with async_session() as session:
+        result = await session.execute(select(Cart).where(and_(Cart.product_id == product_id, Cart.user_id == user_id)))
+        product_in_cart = result.scalar_one_or_none()
+
+        if product_in_cart is not None:
+            await session.delete(product_in_cart)
             await session.commit()
 
 

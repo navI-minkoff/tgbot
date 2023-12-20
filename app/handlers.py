@@ -7,7 +7,7 @@ from aiogram.fsm.context import FSMContext
 from aiogram.types import Message, CallbackQuery, InlineKeyboardMarkup, InlineKeyboardButton
 import app.keyboards as kb
 from app.database.requests import get_product, add_product, get_brand, delete_product, add_user_to_db, \
-    add_product_in_cart, check_product, get_products_in_cart_user, sum_values_in_json, get_sizes_str
+    add_product_in_cart, check_product, get_products_in_cart_user, sum_values_in_json, get_sizes_str, delete_product_in_cart
 from aiogram.fsm.storage.memory import MemoryStorage
 from aiogram.fsm.state import State, StatesGroup
 from app.database.models import Base
@@ -71,9 +71,12 @@ async def print_cart(message: Message):
                                      f'\n<b>Выбранные размеры: </b>{sizes}\n\n<b>Цена</b>: {product.price} руб',
                              reply_markup=InlineKeyboardBuilder().add(InlineKeyboardButton(
                                  text=f'Удалить',
-                                 callback_data=f'del_product_in_cart {product_in_cart.id}')).as_markup())
+                                 callback_data=f'del_product_in_cart {product_in_cart.product_id}')).as_markup())
 
-    await message.answer(f'Сумма заказа: {price} руб', reply_markup=kb.cart_panel)
+    if price == 0:
+        await message.answer(f'Ваша корзина пуста', reply_markup=kb.main)
+    else:
+        await message.answer(f'Сумма заказа: {price} руб', reply_markup=kb.cart_panel)
 
 
 @router.message(F.text == 'Контакты')
@@ -138,8 +141,8 @@ async def cancel_del_product(callback: CallbackQuery):
 @router.callback_query(F.data.startswith('confirm_del_product_in_cart '))
 async def confirm_del_product(callback: CallbackQuery):
     product_id = callback.data.split(' ')[1]
-    await delete_product(product_id)
-    await callback.message.answer('Товар удален', reply_markup=kb.admin_panel)
+    await delete_product_in_cart(product_id, callback.from_user.id)
+    await callback.message.answer('Товар удален', reply_markup=kb.main)
 
 
 @router.callback_query(F.data == 'cancel_del')
@@ -177,12 +180,14 @@ async def product_selected(callback: CallbackQuery):
     check = await check_admin_mod_on(callback)
     if check:
         await bot.send_photo(callback.from_user.id, product.photo,
-                             caption=f'<b>{product.name}</b>\n\nБренд:<b>{brand.name}</b>\n\n{product.description}\n\nЦена: {product.price} руб',
+                             caption=f'<b>{product.name}</b>\n\n<b>Бренд</b>: <i>{brand.name}</i>\n\n{product.description}\n'
+                                     f'\n<b>Цена</b>: {product.price} руб',
                              reply_markup=InlineKeyboardBuilder().add(InlineKeyboardButton(text=f'Удалить',
                                                                                            callback_data=f'del {product.id}')).as_markup())
     else:
         await bot.send_photo(callback.from_user.id, product.photo,
-                             caption=f'<b>{product.name}</b>\n\nБренд:<b>{brand.name}</b>\n\n{product.description}\n\nЦена: {product.price} руб',
+                             caption=f'<b>{product.name}</b>\n\n<b>Бренд</b>: <i>{brand.name}</i>\n\n{product.description}\n'
+                                     f'\n<b>Цена</b>: {product.price} руб',
                              reply_markup=InlineKeyboardBuilder().add(InlineKeyboardButton(text=f'В корзину',
                                                                                            callback_data=f'size_selection {product.id}')).as_markup()
                              )
