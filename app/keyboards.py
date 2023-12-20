@@ -28,6 +28,11 @@ cancel = ReplyKeyboardMarkup(keyboard=[
 
 ], resize_keyboard=True)
 
+cart_panel = ReplyKeyboardMarkup(keyboard=[
+    [KeyboardButton(text='Заказать')],
+    [KeyboardButton(text='Назад в меню')],
+], resize_keyboard=True, input_field_placeholder='Выберите пункт ниже')
+
 
 async def categories(is_admin: bool):
     categories_kb = InlineKeyboardBuilder()

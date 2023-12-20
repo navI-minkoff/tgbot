@@ -7,7 +7,7 @@ from aiogram.fsm.context import FSMContext
 from aiogram.types import Message, CallbackQuery, InlineKeyboardMarkup, InlineKeyboardButton
 import app.keyboards as kb
 from app.database.requests import get_product, add_product, get_brand, delete_product, add_user_to_db, \
-    add_product_in_cart, check_product
+    add_product_in_cart, check_product, get_products_in_cart_user, sum_values_in_json, get_sizes_str
 from aiogram.fsm.storage.memory import MemoryStorage
 from aiogram.fsm.state import State, StatesGroup
 from app.database.models import Base
@@ -58,8 +58,22 @@ async def catalog(message: Message):
 
 
 @router.message(F.text == 'Корзина')
-async def cart(message: Message):
-    await message.answer('Ваша корзина')
+async def print_cart(message: Message):
+    products_in_cart = await get_products_in_cart_user(message.from_user.id)
+    price = 0
+    for product_in_cart in products_in_cart:
+        product = await get_product(product_in_cart.product_id)
+        brand = await get_brand(product.brand_id)
+        price += product.price * sum_values_in_json(product_in_cart.size)
+        sizes = get_sizes_str(product_in_cart.size)
+        await bot.send_photo(message.from_user.id, product.photo,
+                             caption=f'<b>{product.name}</b>\n\n<b>Бренд</b>: <i>{brand.name}</i>\n\n{product.description}\n'
+                                     f'\n<b>Выбранные размеры: </b>{sizes}\n\n<b>Цена</b>: {product.price} руб',
+                             reply_markup=InlineKeyboardBuilder().add(InlineKeyboardButton(
+                                 text=f'Удалить',
+                                 callback_data=f'del_product_in_cart {product_in_cart.id}')).as_markup())
+
+    await message.answer(f'Сумма заказа: {price} руб', reply_markup=kb.cart_panel)
 
 
 @router.message(F.text == 'Контакты')
@@ -73,11 +87,28 @@ async def admin_panel(message: Message):
         await message.answer('Вы вошли в админ-панель', reply_markup=kb.admin_panel)
 
 
+@router.message(F.text == 'Назад в меню')
+async def admin_panel(message: Message):
+    await message.answer('Вы вернулись в меню', reply_markup=kb.main)
+
+
 @router.callback_query(F.data.startswith('category_'))
 async def category_selected(callback: CallbackQuery):
     category_id = callback.data.split('_')[1]
     await callback.message.answer(f'Товары по выбранной категории:', reply_markup=await kb.products(category_id))
     await callback.answer('')
+
+
+@router.callback_query(F.data.startswith('del_product_in_cart '))
+async def del_product(callback: CallbackQuery):
+    product_id = callback.data.split(' ')[1]
+    confirmation_keyboard = InlineKeyboardBuilder()
+    confirmation_keyboard.add(
+        InlineKeyboardButton(text='Подтвердить', callback_data=f'confirm_del_product_in_cart {product_id}'),
+        InlineKeyboardButton(text='Отмена', callback_data='cancel_del_product_in_cart')
+    )
+    await callback.message.answer('Вы уверены, что хотите удалить данный товар?',
+                                  reply_markup=confirmation_keyboard.adjust(2).as_markup())
 
 
 @router.callback_query(F.data.startswith('del '))
@@ -93,6 +124,18 @@ async def del_product(callback: CallbackQuery):
 
 
 @router.callback_query(F.data.startswith('confirm_del '))
+async def confirm_del_product(callback: CallbackQuery):
+    product_id = callback.data.split(' ')[1]
+    await delete_product(product_id)
+    await callback.message.answer('Товар удален', reply_markup=kb.admin_panel)
+
+
+@router.callback_query(F.data == 'cancel_del_product_in_cart')
+async def cancel_del_product(callback: CallbackQuery):
+    await callback.message.answer('Удаление товара отменено', reply_markup=kb.main)
+
+
+@router.callback_query(F.data.startswith('confirm_del_product_in_cart '))
 async def confirm_del_product(callback: CallbackQuery):
     product_id = callback.data.split(' ')[1]
     await delete_product(product_id)

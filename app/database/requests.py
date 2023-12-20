@@ -1,3 +1,4 @@
+import array
 import json
 from sqlite3 import IntegrityError
 
@@ -99,6 +100,14 @@ async def delete_product(product_id):
             await session.commit()
 
 
+async def get_products_in_cart_user(user_id):
+    async with async_session() as session:
+        result = await session.execute(select(Cart).where(Cart.user_id == user_id))
+        products_in_cart = result.scalars().all()
+
+    return products_in_cart
+
+
 async def add_user_to_db(tg_id: int) -> bool:
     async with async_session() as session:
         stmt = select(User).filter(User.tg_id == tg_id)
@@ -117,3 +126,22 @@ async def add_user_to_db(tg_id: int) -> bool:
                 existing_user = await session.execute(stmt)
             return False
         return True
+
+
+def sum_values_in_json(json_str):
+    try:
+        data = json.loads(json_str)
+        if isinstance(data, dict):
+            return sum(data.values())
+    except json.JSONDecodeError as e:
+        raise ValueError(f"Invalid JSON: {str(e)}")
+
+
+def get_sizes_str(json_str) -> str:
+    try:
+        data = json.loads(json_str)
+        if isinstance(data, dict):
+            formatted_counts = [f"{key}: {value} шт" for key, value in data.items()]
+            return ', '.join(formatted_counts)
+    except json.JSONDecodeError as e:
+        raise ValueError(f"Invalid JSON: {str(e)}")
