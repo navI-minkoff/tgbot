@@ -7,7 +7,8 @@ from aiogram.fsm.context import FSMContext
 from aiogram.types import Message, CallbackQuery, InlineKeyboardMarkup, InlineKeyboardButton
 import app.keyboards as kb
 from app.database.requests import get_product, add_product, get_brand, delete_product, add_user_to_db, \
-    add_product_in_cart, check_product, get_products_in_cart_user, sum_values_in_json, get_sizes_str, delete_product_in_cart
+    add_product_in_cart, check_product, get_products_in_cart_user, count_values_in_json, get_sizes_str, \
+    delete_product_in_cart, is_numeric
 from aiogram.fsm.storage.memory import MemoryStorage
 from aiogram.fsm.state import State, StatesGroup
 from app.database.models import Base
@@ -17,8 +18,8 @@ from app.admin import check_admin_mod_on, NewOrder, update_global_variable, get_
 bot = Bot(token=os.getenv('TOKEN'), parse_mode='HTML')
 
 memory_storage = MemoryStorage()
-router = Router()
 dp = Dispatcher(storage=memory_storage)
+router = Router()
 
 
 @router.message(F.text == 'Отмена')
@@ -64,7 +65,7 @@ async def print_cart(message: Message):
     for product_in_cart in products_in_cart:
         product = await get_product(product_in_cart.product_id)
         brand = await get_brand(product.brand_id)
-        price += product.price * sum_values_in_json(product_in_cart.size)
+        price += int(product.price * count_values_in_json(product_in_cart.size))
         sizes = get_sizes_str(product_in_cart.size)
         await bot.send_photo(message.from_user.id, product.photo,
                              caption=f'<b>{product.name}</b>\n\n<b>Бренд</b>: <i>{brand.name}</i>\n\n{product.description}\n'
@@ -86,7 +87,7 @@ async def contacts(message: Message):
 
 @router.message(F.text == 'Админ-панель')
 async def admin_panel(message: Message):
-    if await check_admin_mod_on(message):
+    if await check_admin_mod_on(message.from_user.id):
         await message.answer('Вы вошли в админ-панель', reply_markup=kb.admin_panel)
 
 
@@ -102,6 +103,25 @@ async def category_selected(callback: CallbackQuery):
     await callback.answer('')
 
 
+@router.callback_query(F.data.startswith('del '))
+async def del_product(callback: CallbackQuery):
+    product_id = callback.data.split(' ')[1]
+    confirmation_keyboard = InlineKeyboardBuilder()
+    confirmation_keyboard.add(
+        InlineKeyboardButton(text='Подтвердить', callback_data=f'confirm_del_by_admin {product_id}'),
+        InlineKeyboardButton(text='Отмена', callback_data='cancel_del_by_admin')
+    )
+    await callback.message.answer('Вы уверены, что хотите удалить данный товар?',
+                                  reply_markup=confirmation_keyboard.adjust(2).as_markup())
+
+
+@router.callback_query(F.data.startswith('confirm_del_by_admin '))
+async def confirm_del_product(callback: CallbackQuery):
+    product_id = callback.data.split(' ')[1]
+    await delete_product(product_id)
+    await callback.message.answer('Товар удален', reply_markup=kb.admin_panel)
+
+
 @router.callback_query(F.data.startswith('del_product_in_cart '))
 async def del_product(callback: CallbackQuery):
     product_id = callback.data.split(' ')[1]
@@ -112,25 +132,6 @@ async def del_product(callback: CallbackQuery):
     )
     await callback.message.answer('Вы уверены, что хотите удалить данный товар?',
                                   reply_markup=confirmation_keyboard.adjust(2).as_markup())
-
-
-@router.callback_query(F.data.startswith('del '))
-async def del_product(callback: CallbackQuery):
-    product_id = callback.data.split(' ')[1]
-    confirmation_keyboard = InlineKeyboardBuilder()
-    confirmation_keyboard.add(
-        InlineKeyboardButton(text='Подтвердить', callback_data=f'confirm_del {product_id}'),
-        InlineKeyboardButton(text='Отмена', callback_data='cancel_del')
-    )
-    await callback.message.answer('Вы уверены, что хотите удалить данный товар?',
-                                  reply_markup=confirmation_keyboard.adjust(2).as_markup())
-
-
-@router.callback_query(F.data.startswith('confirm_del '))
-async def confirm_del_product(callback: CallbackQuery):
-    product_id = callback.data.split(' ')[1]
-    await delete_product(product_id)
-    await callback.message.answer('Товар удален', reply_markup=kb.admin_panel)
 
 
 @router.callback_query(F.data == 'cancel_del_product_in_cart')
@@ -145,7 +146,7 @@ async def confirm_del_product(callback: CallbackQuery):
     await callback.message.answer('Товар удален', reply_markup=kb.main)
 
 
-@router.callback_query(F.data == 'cancel_del')
+@router.callback_query(F.data == 'cancel_del_by_admin')
 async def cancel_del_product(callback: CallbackQuery):
     await callback.message.answer('Удаление товара отменено', reply_markup=kb.admin_panel)
 
@@ -177,7 +178,7 @@ async def product_selected(callback: CallbackQuery):
     product_id = callback.data.split('_')[1]
     product = await get_product(product_id=product_id)
     brand = await get_brand(product.brand_id)
-    check = await check_admin_mod_on(callback)
+    check = await check_admin_mod_on(callback.from_user.id)
     if check:
         await bot.send_photo(callback.from_user.id, product.photo,
                              caption=f'<b>{product.name}</b>\n\n<b>Бренд</b>: <i>{brand.name}</i>\n\n{product.description}\n'
@@ -196,7 +197,7 @@ async def product_selected(callback: CallbackQuery):
 
 @router.message(StateFilter(None), F.text == 'Добавить товар')
 async def add_item(message: types.Message, state: FSMContext):
-    if await check_admin_mod_on(message):
+    if await check_admin_mod_on(message.from_user.id):
         await state.set_state(NewOrder.type)
         await message.answer('Выбери тип', reply_markup=await kb.categories(True))
 
@@ -247,10 +248,14 @@ async def add_item_name(message: types.Message, state: FSMContext):
 
 @router.message(StateFilter(NewOrder.price))
 async def add_item_price(message: types.Message, state: FSMContext):
-    await state.update_data(price=message.text)
-    await message.answer('Добавьте размеры товара в формате JSON (например, для одежды: {"S": 10, "M": 15, "L": 20}\n'
-                         'для обуви: {"40": 10, "41": 15, "42": 20})')
-    await state.set_state(NewOrder.sizes)
+    if is_numeric(message.text):
+        await state.update_data(price=message.text)
+        await message.answer(
+            'Добавьте размеры товара в формате JSON (например, для одежды: {"S": 10, "M": 15, "L": 20}\n'
+            'для обуви: {"40": 10, "41": 15, "42": 20})')
+        await state.set_state(NewOrder.sizes)
+    else:
+        await message.answer('Неправильный формат. Введите только число')
 
 
 @router.message(StateFilter(NewOrder.sizes))
@@ -277,7 +282,7 @@ async def add_item_sizes(message: types.Message, state: FSMContext):
 
 @router.message(F.text == 'Удалить товар')
 async def admin_panel(message: Message):
-    if await check_admin_mod_on(message):
+    if await check_admin_mod_on(message.from_user.id):
         await message.answer('Выберете вариант из каталога', reply_markup=await kb.categories(False))
     else:
         return

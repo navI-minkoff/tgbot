@@ -62,42 +62,50 @@ async def check_product(state: FSMContext):
 
 async def get_cart_by_user_and_product(user_id, product_id):
     async with async_session() as session:
-        statement = select(Cart).filter_by(user_id=user_id, product_id=product_id)
+        statement = select(Cart).where(and_(Cart.user_id == user_id, Cart.product_id == product_id))
         result = await session.execute(statement)
         return result.scalar_one_or_none()
 
 
 async def add_product_in_cart(user_id, product_id, product_size):
-    existing_cart = await get_cart_by_user_and_product(user_id, product_id)
-
-    if existing_cart:
-        cart_data = json.loads(existing_cart.size)
-        if product_size in cart_data:
-            cart_data[product_size] += 1
+    async with async_session() as session:
+        existing_cart = await get_cart_by_user_and_product(user_id, product_id)
+        if existing_cart is not None:
+            cart_data = json.loads(existing_cart.size)
+            if product_size in cart_data:
+                cart_data[product_size] += 1
+            else:
+                cart_data[product_size] = 1
+                update_statement = update(Cart).where(Cart.id == existing_cart.id).values(size=json.dumps(cart_data))
+                await session.execute(update_statement)
         else:
-            cart_data[product_size] = 1
-
-        async with async_session() as session:
-            update_statement = update(Cart).where(Cart.id == existing_cart.id).values(size=json.dumps(cart_data))
-            await session.execute(update_statement)
-            await session.commit()
-    else:
-        json_size = json.dumps({product_size: 1})
-        new_cart = Cart(user_id=user_id, product_id=product_id, size=json_size)
-        async with async_session() as session:
+            json_size = json.dumps({product_size: 1})
+            new_cart = Cart(user_id=user_id, product_id=product_id, size=json_size)
             session.add(new_cart)
-            await session.commit()
+        await session.commit()
 
 
 async def delete_product(product_id):
     async with async_session() as session:
-        stmt = select(Product).where(Product.id == product_id)
-        result = await session.execute(stmt)
-        product = result.scalar_one_or_none()
+        product = await session.execute(select(Product).where(Product.id == product_id))
+        product = product.scalar_one_or_none()
 
         if product is not None:
+            await delete_cart_items_by_product_id(product_id)
+
             await session.delete(product)
             await session.commit()
+
+
+async def delete_cart_items_by_product_id(product_id):
+    async with async_session() as session:
+        cart_items = await session.execute(select(Cart).where(Cart.product_id == product_id))
+        cart_items = cart_items.scalars().all()
+
+        for cart_item in cart_items:
+            await session.delete(cart_item)
+
+        await session.commit()
 
 
 async def delete_product_in_cart(product_id, user_id):
@@ -133,16 +141,16 @@ async def add_user_to_db(tg_id: int) -> bool:
             except IntegrityError:
                 await session.rollback()
                 stmt = select(User).filter(User.tg_id == tg_id)
-                existing_user = await session.execute(stmt)
+                await session.execute(stmt)
             return False
         return True
 
 
-def sum_values_in_json(json_str):
+def count_values_in_json(json_str):
     try:
         data = json.loads(json_str)
         if isinstance(data, dict):
-            return sum(data.values())
+            return int(sum(data.values()))
     except json.JSONDecodeError as e:
         raise ValueError(f"Invalid JSON: {str(e)}")
 
@@ -155,3 +163,11 @@ def get_sizes_str(json_str) -> str:
             return ', '.join(formatted_counts)
     except json.JSONDecodeError as e:
         raise ValueError(f"Invalid JSON: {str(e)}")
+
+
+def is_numeric(input_str):
+    try:
+        int_value = int(input_str)
+        return str(int_value) == input_str
+    except ValueError:
+        return False

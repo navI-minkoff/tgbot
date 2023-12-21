@@ -25,9 +25,9 @@ class NewOrder(StatesGroup):
     sizes = State()
 
 
-async def check_admin_mod_on(callback: CallbackQuery):
+async def check_admin_mod_on(user_id):
     global ADMIN_MODE
-    if callback.from_user.id != int(os.getenv('ADMIN_ID')):
+    if user_id != int(os.getenv('ADMIN_ID')):
         return False
     elif ADMIN_MODE:
         return True

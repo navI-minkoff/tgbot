@@ -10,7 +10,6 @@ import os
 from app.database.models import async_main
 
 
-
 async def main():
     await async_main()
     load_dotenv()
@@ -18,6 +17,7 @@ async def main():
 
     dp = Dispatcher()
     dp.include_router(router)
+    await bot.delete_webhook(drop_pending_updates=True)
     await dp.start_polling(bot)
 
 
