@@ -25,6 +25,12 @@ class NewOrder(StatesGroup):
     sizes = State()
 
 
+class Config(StatesGroup):
+    user_id = State()
+    track_config = State()
+    custom = State()
+
+
 async def check_admin_mod_on(user_id):
     global ADMIN_MODE
     if user_id != int(os.getenv('ADMIN_ID')):

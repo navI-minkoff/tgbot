@@ -13,7 +13,7 @@ from aiogram.fsm.storage.memory import MemoryStorage
 from aiogram.fsm.state import State, StatesGroup
 from app.database.models import Base
 from aiogram.utils.keyboard import InlineKeyboardBuilder
-from app.admin import check_admin_mod_on, NewOrder, update_global_variable, get_global_variable
+from app.admin import check_admin_mod_on, NewOrder, update_global_variable, get_global_variable, Config
 
 bot = Bot(token=os.getenv('TOKEN'), parse_mode='HTML')
 
@@ -83,6 +83,65 @@ async def print_cart(message: Message):
 @router.message(F.text == 'Контакты')
 async def contacts(message: Message):
     await message.answer('Номер телефона')
+
+
+@router.message(F.text == 'Заказать')
+async def contacts(message: Message):
+    confirmation_keyboard = InlineKeyboardBuilder()
+    confirmation_keyboard.add(
+        InlineKeyboardButton(text='Подтвердить', callback_data=f'confirm_custom_products'),
+        InlineKeyboardButton(text='Отмена', callback_data='cancel_custom_products')
+    )
+    await message.answer('Вы уверены, что хотите заказать данные товары?',
+                         reply_markup=confirmation_keyboard.adjust(2).as_markup())
+
+
+@router.callback_query(F.data.startswith('confirm_custom_products'))
+async def confirm_del_product(callback: CallbackQuery):
+    confirmation_keyboard = InlineKeyboardBuilder()
+    confirmation_keyboard.add(
+        InlineKeyboardButton(text='Подтвердить', callback_data=f'confirm_custom {callback.from_user.id}'),
+        InlineKeyboardButton(text='Отмена', callback_data='cancel_custom')
+    )
+    await bot.send_message(os.getenv('CHAT_ID'), f'{callback.from_user.first_name} сделал заказ:',
+                           reply_markup=confirmation_keyboard.adjust(2).as_markup())
+
+
+@router.callback_query(F.data.startswith('cancel_custom_products'))
+async def confirm_del_product(callback: CallbackQuery):
+    await callback.message.answer('Отмена заказа')
+
+
+@router.callback_query(F.data.startswith('confirm_custom '))
+async def confirm_custom(callback: CallbackQuery, state: FSMContext):
+    await state.set_state(Config.user_id)
+    user_id = callback.data.split(' ')[1]
+    await state.update_data(user_id=user_id)
+    await state.set_state(Config.track_config)
+    await callback.message.answer('Введите трек заказа:')
+
+
+@router.message(StateFilter(Config.track_config))
+async def add_item_type(message: Message, state: FSMContext):
+    await state.update_data(track_config=message.text)
+    try:
+        await state.update_data(custom=True)
+    except Exception as e:
+        await message.answer(f'Ошибка f{e}')
+        await state.update_data(confirm_custom=False)
+
+    if Config.custom:
+        data = await state.get_data()
+        user_id = data['user_id']
+        track_config = data['track_config']
+        custom = data['custom']
+        await message.answer(f'Заказ оформлен  {user_id}, {track_config}, {custom}')
+        await state.clear()
+
+
+@router.callback_query(F.data.startswith('cancel_custom'))
+async def confirm_del_product(callback: CallbackQuery):
+    await callback.message.answer('Отмена заказа')
 
 
 @router.message(F.text == 'Админ-панель')
