@@ -8,7 +8,7 @@ from aiogram.types import Message, CallbackQuery, InlineKeyboardMarkup, InlineKe
 import app.keyboards as kb
 from app.database.requests import get_product, add_product, get_brand, delete_product, add_user_to_db, \
     add_product_in_cart, check_product, get_products_in_cart_user, count_values_in_json, get_sizes_str, \
-    delete_product_in_cart, is_numeric, add_custom_and_departures
+    delete_product_in_cart, is_numeric, add_custom_and_departures, clear_cart_and_update_product
 from aiogram.fsm.storage.memory import MemoryStorage
 from aiogram.fsm.state import State, StatesGroup
 from app.database.models import Base
@@ -159,6 +159,7 @@ async def add_item_type(message: Message, state: FSMContext):
             price += int(product.price * count_values_in_json(product_in_cart.size))
 
         await add_custom_and_departures(user_id, price, track_config, product_ids)
+        await clear_cart_and_update_product(user_id)
 
         await state.clear()
 

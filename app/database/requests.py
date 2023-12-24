@@ -3,7 +3,7 @@ import json
 from sqlite3 import IntegrityError
 
 from app.database.models import User, Category, Product, Brand, async_session, Cart, Custom, Departure
-from sqlalchemy import select, update, insert, and_
+from sqlalchemy import select, update, insert, and_, delete
 from aiogram.fsm.context import FSMContext
 
 
@@ -192,4 +192,24 @@ async def add_custom_and_departures(user_id, price, track_id, product_ids):
             new_departure = Departure(custom_id=new_custom_id, product_id=product_id)
             session.add(new_departure)
 
+        await session.commit()
+
+
+def subtract_json(json1, json2):
+    result = json1.copy()
+    for key, value in json2.items():
+        result[key] = max(0, result.get(key, 0) - value)
+    return result
+
+
+async def clear_cart_and_update_product(user_id):
+    async with async_session() as session:
+        products_in_cart = await get_products_in_cart_user(user_id)
+        for product_in_cart in products_in_cart:
+            new_product = await get_product(product_in_cart.product_id)
+            new_sizes = subtract_json(new_product.sizes, product_in_cart.size)
+            sizes = new_sizes
+            await session.execute(update(Product).where(Product.id == new_product.id).values(sizes=sizes))
+
+        await session.execute(delete(Cart).where(Cart.user_id == user_id))
         await session.commit()
