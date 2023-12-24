@@ -20,7 +20,7 @@ main_admin = ReplyKeyboardMarkup(keyboard=[
 admin_panel = ReplyKeyboardMarkup(keyboard=[
     [KeyboardButton(text='Добавить товар')],
     [KeyboardButton(text='Удалить товар')],
-    [KeyboardButton(text='Сделать рассылку')]
+    [KeyboardButton(text='Выгрузка данных')]
 ], resize_keyboard=True, input_field_placeholder='Выберите пункт ниже')
 
 cancel = ReplyKeyboardMarkup(keyboard=[

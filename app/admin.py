@@ -1,6 +1,7 @@
 from aiogram.fsm.state import State, StatesGroup
 from aiogram.types import Message, CallbackQuery
 import os
+import yadisk
 
 ADMIN_MODE = False
 
@@ -39,3 +40,12 @@ async def check_admin_mod_on(user_id):
         return True
     else:
         return False
+
+
+async def create_backup(local_file_path, remote_file_path):
+    disk = yadisk.YaDisk(token=os.getenv('YANDEX_TOKEN'))
+    try:
+        disk.upload(local_file_path, remote_file_path)
+        print("Файл успешно загружен на Яндекс.Диск.")
+    except Exception as e:
+        print(f"Ошибка при загрузке файла: {e}")

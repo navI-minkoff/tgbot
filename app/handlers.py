@@ -1,6 +1,9 @@
 import json
 import os
-
+from datetime import datetime
+from sqlalchemy import Column, Integer, BigInteger, ForeignKey, JSON
+from sqlalchemy.orm import relationship
+from sqlalchemy.ext.declarative import declarative_base
 from aiogram import Router, F, Dispatcher, types, Bot
 from aiogram.filters import CommandStart, Command, StateFilter
 from aiogram.fsm.context import FSMContext
@@ -8,12 +11,13 @@ from aiogram.types import Message, CallbackQuery, InlineKeyboardMarkup, InlineKe
 import app.keyboards as kb
 from app.database.requests import get_product, add_product, get_brand, delete_product, add_user_to_db, \
     add_product_in_cart, check_product, get_products_in_cart_user, count_values_in_json, get_sizes_str, \
-    delete_product_in_cart, is_numeric, add_custom_and_departures, clear_cart_and_update_product
+    delete_product_in_cart, is_numeric, add_custom_and_departures, clear_cart_and_update_product, \
+    export_database_to_csv_and_xlsx
 from aiogram.fsm.storage.memory import MemoryStorage
 from aiogram.fsm.state import State, StatesGroup
 from app.database.models import Base
 from aiogram.utils.keyboard import InlineKeyboardBuilder
-from app.admin import check_admin_mod_on, NewOrder, update_global_variable, get_global_variable, Config
+from app.admin import check_admin_mod_on, NewOrder, update_global_variable, get_global_variable, Config, create_backup
 
 bot = Bot(token=os.getenv('TOKEN'), parse_mode='HTML')
 
@@ -278,6 +282,37 @@ async def product_selected(callback: CallbackQuery):
                                                                                            callback_data=f'size_selection {product.id}')).as_markup()
                              )
     await callback.answer(f'Вы выбрали {product.name}')
+
+
+@router.message(F.text == 'Выгрузка данных')
+async def backup_by_admin(message: types.Message):
+    if await check_admin_mod_on(message.from_user.id):
+        confirmation_keyboard = InlineKeyboardBuilder()
+        confirmation_keyboard.add(
+            InlineKeyboardButton(text='Выгрузить в csv', callback_data=f'upload_to_the_cloud csv'),
+            InlineKeyboardButton(text='Выгрузить в xlsx', callback_data='upload_to_the_cloud xlsx'),
+            InlineKeyboardButton(text='Отмена', callback_data='cancel_unloading')
+        )
+    await message.answer(text='Выберите формат:', reply_markup=confirmation_keyboard.adjust(3).as_markup())
+
+
+@router.callback_query(F.data.startswith('upload_to_the_cloud '))
+async def upload_to_the_cloud(callback: CallbackQuery):
+    format = callback.data.split(' ')[1]
+    csv_filename = f'db.csv'
+    xlsx_filename = f'db.xlsx'
+    # try:
+    await export_database_to_csv_and_xlsx(csv_filename, xlsx_filename, format)
+    await callback.message.edit_text(f'Выгрузка завершена')
+
+
+# except Exception as e:
+# await callback.message.answer(f'Ошибка {e}')
+
+
+@router.callback_query(F.data.startswith('cancel_unloading'))
+async def upload_to_the_cloud(callback: CallbackQuery):
+    await callback.message.edit_text(f'Выгрузка отменена')
 
 
 @router.message(StateFilter(None), F.text == 'Добавить товар')

@@ -1,10 +1,13 @@
 import array
+import csv
 import json
+from dataclasses import asdict
 from sqlite3 import IntegrityError
-
-from app.database.models import User, Category, Product, Brand, async_session, Cart, Custom, Departure
+from app.database.models import User, Category, Product, Brand, async_session, Cart, Custom, Departure, engine
 from sqlalchemy import select, update, insert, and_, delete
 from aiogram.fsm.context import FSMContext
+import pandas as pd
+from openpyxl import Workbook
 
 
 async def get_categories():
@@ -210,6 +213,72 @@ async def clear_cart_and_update_product(user_id):
             new_sizes = subtract_json(new_product.sizes, product_in_cart.size)
             sizes = new_sizes
             await session.execute(update(Product).where(Product.id == new_product.id).values(sizes=sizes))
+            await session.commit()
 
         await session.execute(delete(Cart).where(Cart.user_id == user_id))
         await session.commit()
+
+
+async def export_database_to_csv_and_xlsx(csv_filename, xlsx_filename, file_format):
+    async with async_session() as session:
+
+        users = await session.execute(select(User))
+        users_data = [dict(user.__dict__) for user in users.scalars().all()]
+        for user_data in users_data:
+            del user_data[next(iter(user_data))]
+        users_df = pd.DataFrame(users_data)
+
+        categories = await session.execute(select(Category))
+        categories_data = [dict(category.__dict__) for category in categories.scalars().all()]
+        for category_data in categories_data:
+            del category_data[next(iter(category_data))]
+        categories_df = pd.DataFrame(categories_data)
+
+        brand = await session.execute(select(Brand))
+        brands_data = [dict(brand.__dict__) for brand in brand.scalars().all()]
+        for brand_data in brands_data:
+            del brand_data[next(iter(brand_data))]
+        brands_df = pd.DataFrame(brands_data)
+
+        product = await session.execute(select(Product))
+        products_data = [dict(product.__dict__) for product in product.scalars().all()]
+        for product_data in products_data:
+            del product_data[next(iter(product_data))]
+        products_df = pd.DataFrame(products_data)
+
+        cart = await session.execute(select(Cart))
+        carts_data = [dict(cart.__dict__) for cart in cart.scalars().all()]
+        for cart_data in carts_data:
+            del cart_data[next(iter(cart_data))]
+        cart_df = pd.DataFrame(carts_data)
+
+        custom = await session.execute(select(Custom))
+        customs_data = [dict(custom.__dict__) for custom in custom.scalars().all()]
+        for custom_data in customs_data:
+            del custom_data[next(iter(custom_data))]
+        custom_df = pd.DataFrame(customs_data)
+
+        departure = await session.execute(select(Departure))
+        departures_data = [dict(departure.__dict__) for departure in departure.scalars().all()]
+        for departure_data in departures_data:
+            del departure_data[next(iter(departure_data))]
+        departure_df = pd.DataFrame(departures_data)
+
+    if file_format == 'csv':
+        users_df.to_csv(csv_filename, index=False)
+        categories_df.to_csv(csv_filename, mode='a', index=False)
+        brands_df.to_csv(csv_filename, mode='a', index=False)
+        products_df.to_csv(csv_filename, mode='a', index=False)
+        cart_df.to_csv(csv_filename, mode='a', index=False)
+        custom_df.to_csv(csv_filename, mode='a', index=False)
+        departure_df.to_csv(csv_filename, mode='a', index=False)
+
+    elif file_format == 'xlsx':
+        with pd.ExcelWriter(xlsx_filename, engine='openpyxl') as writer:
+            users_df.to_excel(writer, sheet_name='users', index=False)
+            categories_df.to_excel(writer, sheet_name='categories', index=False)
+            brands_df.to_excel(writer, sheet_name='brands', index=False)
+            products_df.to_excel(writer, sheet_name='products', index=False)
+            cart_df.to_excel(writer, sheet_name='cart', index=False)
+            custom_df.to_excel(writer, sheet_name='custom', index=False)
+            departure_df.to_excel(writer, sheet_name='departure', index=False)
