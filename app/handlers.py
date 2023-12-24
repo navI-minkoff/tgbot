@@ -8,7 +8,7 @@ from aiogram.types import Message, CallbackQuery, InlineKeyboardMarkup, InlineKe
 import app.keyboards as kb
 from app.database.requests import get_product, add_product, get_brand, delete_product, add_user_to_db, \
     add_product_in_cart, check_product, get_products_in_cart_user, count_values_in_json, get_sizes_str, \
-    delete_product_in_cart, is_numeric
+    delete_product_in_cart, is_numeric, add_custom_and_departures
 from aiogram.fsm.storage.memory import MemoryStorage
 from aiogram.fsm.state import State, StatesGroup
 from app.database.models import Base
@@ -98,18 +98,31 @@ async def contacts(message: Message):
 
 @router.callback_query(F.data.startswith('confirm_custom_products'))
 async def confirm_del_product(callback: CallbackQuery):
+    await callback.message.edit_text('В ближайшее время с вами свяжется наш сотрудник')
     confirmation_keyboard = InlineKeyboardBuilder()
     confirmation_keyboard.add(
-        InlineKeyboardButton(text='Подтвердить', callback_data=f'confirm_custom {callback.from_user.id}'),
+        InlineKeyboardButton(text='Ввести трек номер', callback_data=f'confirm_custom {callback.from_user.id}'),
         InlineKeyboardButton(text='Отмена', callback_data='cancel_custom')
     )
-    await bot.send_message(os.getenv('CHAT_ID'), f'{callback.from_user.first_name} сделал заказ:',
+    products_in_cart = await get_products_in_cart_user(callback.from_user.id)
+
+    cart_info = "Список заказанных товаров:\n"
+    price = 0
+    if products_in_cart:
+        for product_in_cart in products_in_cart:
+            product = await get_product(product_in_cart.product_id)
+            price += int(product.price * count_values_in_json(product_in_cart.size))
+            selected_sizes = ', '.join(f"{key}:{value}" for key, value in product_in_cart.size.items())
+            cart_info += f"{product.name}: {selected_sizes}\n"
+
+    await bot.send_message(os.getenv('CHAT_ID'), f'@{callback.from_user.username} сделал заказ.' + cart_info +
+                           f'Сумма заказа: {price}',
                            reply_markup=confirmation_keyboard.adjust(2).as_markup())
 
 
 @router.callback_query(F.data.startswith('cancel_custom_products'))
 async def confirm_del_product(callback: CallbackQuery):
-    await callback.message.answer('Отмена заказа')
+    await callback.message.edit_text('Заказ отменен')
 
 
 @router.callback_query(F.data.startswith('confirm_custom '))
@@ -135,13 +148,24 @@ async def add_item_type(message: Message, state: FSMContext):
         user_id = data['user_id']
         track_config = data['track_config']
         custom = data['custom']
+        products_in_cart = await get_products_in_cart_user(message.from_user.id)
+
         await message.answer(f'Заказ оформлен  {user_id}, {track_config}, {custom}')
+        price = 0
+        product_ids = []
+        for product_in_cart in products_in_cart:
+            product = await get_product(product_in_cart.product_id)
+            product_ids.append(product.id)
+            price += int(product.price * count_values_in_json(product_in_cart.size))
+
+        await add_custom_and_departures(user_id, price, track_config, product_ids)
+
         await state.clear()
 
 
 @router.callback_query(F.data.startswith('cancel_custom'))
 async def confirm_del_product(callback: CallbackQuery):
-    await callback.message.answer('Отмена заказа')
+    await callback.message.edit_text('Отмена заказа')
 
 
 @router.message(F.text == 'Админ-панель')
@@ -195,14 +219,14 @@ async def del_product(callback: CallbackQuery):
 
 @router.callback_query(F.data == 'cancel_del_product_in_cart')
 async def cancel_del_product(callback: CallbackQuery):
-    await callback.message.answer('Удаление товара отменено', reply_markup=kb.main)
+    await callback.message.edit_text('Удаление товара отменено')
 
 
 @router.callback_query(F.data.startswith('confirm_del_product_in_cart '))
 async def confirm_del_product(callback: CallbackQuery):
     product_id = callback.data.split(' ')[1]
     await delete_product_in_cart(product_id, callback.from_user.id)
-    await callback.message.answer('Товар удален', reply_markup=kb.main)
+    await callback.message.edit_text('Товар удален')
 
 
 @router.callback_query(F.data == 'cancel_del_by_admin')
@@ -214,6 +238,7 @@ async def cancel_del_product(callback: CallbackQuery):
 async def product_size_selection(callback: CallbackQuery):
     product_id = callback.data.split(' ')[1]
     product = await get_product(product_id)
+
     product_sizes = product.sizes
     available_sizes = [size for size, quantity in product_sizes.items() if quantity != 0]
     sizes_keyboard = InlineKeyboardBuilder()

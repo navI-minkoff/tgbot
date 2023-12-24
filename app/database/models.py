@@ -23,6 +23,7 @@ class User(Base):
     tg_id = mapped_column(BigInteger)
 
     cart = relationship('Cart', back_populates='user')
+    custom = relationship('Custom', back_populates='user')
 
 
 class Category(Base):
@@ -57,6 +58,7 @@ class Product(Base):
     category = relationship('Category', back_populates='products')
     brand = relationship('Brand', back_populates='products')
     cart = relationship('Cart', back_populates='product')
+    departure = relationship('Departure', back_populates='products')
 
 
 class Cart(Base):
@@ -69,6 +71,29 @@ class Cart(Base):
 
     user = relationship('User', back_populates='cart')
     product = relationship('Product', back_populates='cart')
+
+
+class Custom(Base):
+    __tablename__ = 'custom'
+
+    id: Mapped[int] = mapped_column(primary_key=True)
+    user_id: Mapped[int] = mapped_column(ForeignKey('users.id'))
+    price: Mapped[int] = mapped_column()
+    track_id: Mapped[int] = mapped_column()
+
+    user = relationship('User', back_populates='custom')
+    departure = relationship('Departure', back_populates='custom')
+
+
+class Departure(Base):
+    __tablename__ = 'departure'
+
+    id: Mapped[int] = mapped_column(primary_key=True)
+    custom_id: Mapped[int] = mapped_column(ForeignKey('custom.id'))
+    product_id: Mapped[int] = mapped_column(ForeignKey('products.id'))
+
+    products = relationship('Product', back_populates='departure')
+    custom = relationship('Custom', back_populates='departure')
 
 
 async def async_main():

@@ -2,7 +2,7 @@ import array
 import json
 from sqlite3 import IntegrityError
 
-from app.database.models import User, Category, Product, Brand, async_session, Cart
+from app.database.models import User, Category, Product, Brand, async_session, Cart, Custom, Departure
 from sqlalchemy import select, update, insert, and_
 from aiogram.fsm.context import FSMContext
 
@@ -71,15 +71,15 @@ async def add_product_in_cart(user_id, product_id, product_size):
     async with async_session() as session:
         existing_cart = await get_cart_by_user_and_product(user_id, product_id)
         if existing_cart is not None:
-            cart_data = json.loads(existing_cart.size)
+            cart_data = existing_cart.size
             if product_size in cart_data:
                 cart_data[product_size] += 1
             else:
                 cart_data[product_size] = 1
-                update_statement = update(Cart).where(Cart.id == existing_cart.id).values(size=json.dumps(cart_data))
-                await session.execute(update_statement)
+            existing_cart.size = cart_data
+            await session.execute(update(Cart).where(Cart.id == existing_cart.id).values(size=cart_data))
         else:
-            json_size = json.dumps({product_size: 1})
+            json_size = {product_size: 1}
             new_cart = Cart(user_id=user_id, product_id=product_id, size=json_size)
             session.add(new_cart)
         await session.commit()
@@ -146,22 +146,26 @@ async def add_user_to_db(tg_id: int) -> bool:
         return True
 
 
-def count_values_in_json(json_str):
+def count_values_in_json(json_obj) -> int:
     try:
-        data = json.loads(json_str)
-        if isinstance(data, dict):
-            return int(sum(data.values()))
-    except json.JSONDecodeError as e:
-        raise ValueError(f"Invalid JSON: {str(e)}")
+        if isinstance(json_obj, dict):
+            return sum(json_obj.values())
+        return 0
+    except Exception as e:
+        raise ValueError(f"Error processing JSON: {str(e)}")
 
 
 def get_sizes_str(json_str) -> str:
     try:
-        data = json.loads(json_str)
+        if isinstance(json_str, dict):
+            data = json_str
+        else:
+            data = json.loads(json_str)
+
         if isinstance(data, dict):
-            formatted_counts = [f"{key}: {value} шт" for key, value in data.items()]
+            formatted_counts = [f"{key} : {value}" for key, value in data.items()]
             return ', '.join(formatted_counts)
-    except json.JSONDecodeError as e:
+    except (json.JSONDecodeError, TypeError) as e:
         raise ValueError(f"Invalid JSON: {str(e)}")
 
 
@@ -171,3 +175,21 @@ def is_numeric(input_str):
         return str(int_value) == input_str
     except ValueError:
         return False
+
+
+async def add_custom_and_departures(user_id, price, track_id, product_ids):
+    async with async_session() as session:
+        new_custom = Custom(user_id=user_id, price=price, track_id=track_id)
+        session.add(new_custom)
+        await session.commit()
+
+        result = await session.execute(
+            select(Custom).where(Custom.user_id == user_id).order_by(Custom.id.desc()).limit(1))
+        new_custom = result.scalar_one()
+        new_custom_id = new_custom.id
+
+        for product_id in product_ids:
+            new_departure = Departure(custom_id=new_custom_id, product_id=product_id)
+            session.add(new_departure)
+
+        await session.commit()
