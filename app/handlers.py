@@ -105,7 +105,7 @@ async def confirm_del_product(callback: CallbackQuery):
     await callback.message.edit_text('📧В ближайшее время с вами свяжется наш сотрудник')
     confirmation_keyboard = InlineKeyboardBuilder()
     confirmation_keyboard.add(
-        InlineKeyboardButton(text='📟Ввести трек номер', callback_data=f'confirm_custom {callback.from_user.id}'),
+        InlineKeyboardButton(text='📟Ввести трек-номер', callback_data=f'confirm_custom {callback.from_user.id}'),
         InlineKeyboardButton(text='❌Отмена', callback_data='cancel_custom')
     )
     products_in_cart = await get_products_in_cart_user(callback.from_user.id)
@@ -135,7 +135,8 @@ async def confirm_custom(callback: CallbackQuery, state: FSMContext):
     user_id = callback.data.split(' ')[1]
     await state.update_data(user_id=user_id)
     await state.set_state(Config.track_config)
-    await callback.message.answer('📟Введите трек заказа:')
+    await callback.message.edit_text(callback.message.text)
+    await callback.message.answer('📟Введите трек-номер заказа:')
 
 
 @router.message(StateFilter(Config.track_config))
@@ -171,7 +172,7 @@ async def add_item_type(message: Message, state: FSMContext):
 
 @router.callback_query(F.data.startswith('cancel_custom'))
 async def confirm_del_product(callback: CallbackQuery):
-    await callback.message.edit_text('❌Отмена заказа')
+    await callback.message.edit_text(callback.message.text + '\n❌Отмена заказа')
 
 
 @router.message(F.text == 'Админ-панель')
@@ -208,7 +209,7 @@ async def del_product(callback: CallbackQuery):
 async def confirm_del_product(callback: CallbackQuery):
     product_id = callback.data.split(' ')[1]
     await delete_product(product_id)
-    await callback.message.answer('❌Товар удален', reply_markup=kb.admin_panel)
+    await callback.message.edit_text(callback.message.text + '\n\n❌Товар удален')
 
 
 @router.callback_query(F.data.startswith('del_product_in_cart '))
@@ -252,7 +253,7 @@ async def product_size_selection(callback: CallbackQuery):
         sizes_keyboard.add(
             InlineKeyboardButton(text=f'{size_name}', callback_data=f'add_product {product_id} {size_name}'))
 
-    await callback.message.answer(text='Выберите размер:', reply_markup=sizes_keyboard.adjust(2).as_markup())
+    await callback.message.answer(text='📏Выберите размер:', reply_markup=sizes_keyboard.adjust(2).as_markup())
 
 
 @router.callback_query(F.data.startswith('add_product '))
@@ -294,7 +295,7 @@ async def backup_by_admin(message: types.Message):
             InlineKeyboardButton(text='📤Выгрузить в xlsx', callback_data='upload_to_the_cloud xlsx'),
             InlineKeyboardButton(text='❌Отмена', callback_data='cancel_unloading')
         )
-    await message.answer(text='Выберите формат:', reply_markup=confirmation_keyboard.adjust(3).as_markup())
+    await message.answer(text='🔎Выберите формат:', reply_markup=confirmation_keyboard.adjust(2).as_markup())
 
 
 @router.callback_query(F.data.startswith('upload_to_the_cloud '))
