@@ -6,9 +6,9 @@ from aiogram.fsm.state import State, StatesGroup
 from aiogram.fsm.context import FSMContext
 
 main = ReplyKeyboardMarkup(keyboard=[
-    [KeyboardButton(text='Каталог')],
-    [KeyboardButton(text='Корзина')],
-    [KeyboardButton(text='Контакты')]
+    [KeyboardButton(text='📒Каталог')],
+    [KeyboardButton(text='🛒Корзина')],
+    [KeyboardButton(text='⚙️Поддержка')]
 ], resize_keyboard=True, input_field_placeholder='Выберите пункт ниже')
 
 main_admin = ReplyKeyboardMarkup(keyboard=[
@@ -18,19 +18,19 @@ main_admin = ReplyKeyboardMarkup(keyboard=[
 ], resize_keyboard=True, input_field_placeholder='Выберите пункт ниже')
 
 admin_panel = ReplyKeyboardMarkup(keyboard=[
-    [KeyboardButton(text='Добавить товар')],
-    [KeyboardButton(text='Удалить товар')],
-    [KeyboardButton(text='Выгрузка данных')]
+    [KeyboardButton(text='🆕Добавить товар')],
+    [KeyboardButton(text='🗑️Удалить товар')],
+    [KeyboardButton(text='📤Выгрузка данных')]
 ], resize_keyboard=True, input_field_placeholder='Выберите пункт ниже')
 
 cancel = ReplyKeyboardMarkup(keyboard=[
-    [KeyboardButton(text='Отмена')]
+    [KeyboardButton(text='❌Отмена')]
 
 ], resize_keyboard=True)
 
 cart_panel = ReplyKeyboardMarkup(keyboard=[
-    [KeyboardButton(text='Заказать')],
-    [KeyboardButton(text='Назад в меню')],
+    [KeyboardButton(text='📦Заказать')],
+    [KeyboardButton(text='↩️Назад в меню')],
 ], resize_keyboard=True, input_field_placeholder='Выберите пункт ниже')
 
 

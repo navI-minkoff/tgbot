@@ -197,6 +197,8 @@ async def add_custom_and_departures(user_id, price, track_id, product_ids):
 
         await session.commit()
 
+        return new_custom_id
+
 
 def subtract_json(json1, json2):
     result = json1.copy()
